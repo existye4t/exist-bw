@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../useI18n';
+import { toGrayscale } from '../utils/grayscale';
+import type { Adjustments } from '../types';
 
 interface CompareSliderProps {
   beforeUrl: string;
-  afterUrl?: string;
+  adjustments: Adjustments;
   alt: string;
 }
 
-// Drag the divider to reveal the original against the black and white result.
-// The converted image is rendered full width and clipped, so both sides stay
-// pixel-aligned no matter where the divider sits.
-export const CompareSlider: React.FC<CompareSliderProps> = ({ beforeUrl, afterUrl, alt }) => {
- const { t } = useI18n();
- const frameRef = useRef<HTMLDivElement>(null);
+// The original sits on the left of the divider, the adjusted result on the
+// right. The result is painted straight onto a canvas from cached pixels, so a
+// slider move shows up on the same frame instead of waiting for an encode.
+export const CompareSlider: React.FC<CompareSliderProps> = ({ beforeUrl, adjustments, alt }) => {
+  const { t } = useI18n();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sourceRef = useRef<ImageData | null>(null);
   const [position, setPosition] = useState(50);
   const [frameWidth, setFrameWidth] = useState(0);
   const dragging = useRef(false);
@@ -26,6 +30,49 @@ export const CompareSlider: React.FC<CompareSliderProps> = ({ beforeUrl, afterUr
     observer.observe(frame);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      const maxEdge = 1400;
+      const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+      const width = Math.max(1, Math.round(img.naturalWidth * scale));
+      const height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const scratch = document.createElement('canvas');
+      scratch.width = width;
+      scratch.height = height;
+      const ctx = scratch.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, width, height);
+      sourceRef.current = ctx.getImageData(0, 0, width, height);
+      paint(adjustments);
+    };
+    img.src = beforeUrl;
+    return () => {
+      cancelled = true;
+    };
+    // The pixels are read once per image; adjustments repaint below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beforeUrl]);
+
+  const paint = useCallback((applied: Adjustments) => {
+    const source = sourceRef.current;
+    const canvas = canvasRef.current;
+    if (!source || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    if (canvas.width !== source.width) canvas.width = source.width;
+    if (canvas.height !== source.height) canvas.height = source.height;
+    const frame = new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+    toGrayscale(frame, applied);
+    ctx.putImageData(frame, 0, 0);
+  }, []);
+
+  useEffect(() => {
+    paint(adjustments);
+  }, [adjustments, paint]);
 
   const updateFromPointer = useCallback((clientX: number) => {
     const frame = frameRef.current;
@@ -63,20 +110,17 @@ export const CompareSlider: React.FC<CompareSliderProps> = ({ beforeUrl, afterUr
       }}
     >
       {beforeUrl && (
-        <img src={beforeUrl} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+        <img src={beforeUrl} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
       )}
 
-      {afterUrl && (
-        <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${position}%` }}>
-          <img
-            src={afterUrl}
-            alt={alt}
-            className="absolute inset-y-0 left-0 h-full max-w-none object-contain"
-            style={{ width: frameWidth || undefined }}
-            draggable={false}
-          />
-        </div>
-      )}
+      <div className="absolute inset-y-0 right-0 overflow-hidden" style={{ width: `${100 - position}%` }}>
+        <canvas
+          ref={canvasRef}
+          aria-label={alt}
+          className="absolute inset-y-0 right-0 h-full max-w-none object-contain"
+          style={{ width: frameWidth || undefined }}
+        />
+      </div>
 
       <div className="pointer-events-none absolute inset-y-0" style={{ left: `${position}%` }}>
         <div className="absolute inset-y-0 -translate-x-1/2 w-px bg-white/80" />
@@ -85,11 +129,11 @@ export const CompareSlider: React.FC<CompareSliderProps> = ({ beforeUrl, afterUr
         </div>
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest text-white/70">
-      {t('compare.original')}
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-widest text-white/70 uppercase">
+        {t('compare.original')}
       </div>
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest text-white/70">
-      {t('compare.result')}
+      <div className="pointer-events-none absolute right-3 bottom-3 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-widest text-white/70 uppercase">
+        {t('compare.result')}
       </div>
     </div>
   );

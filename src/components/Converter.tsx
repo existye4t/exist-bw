@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, Download, ImagePlus, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, Download, ImagePlus, Loader2, RotateCcw, X } from 'lucide-react';
 import type { ImageFileItem, OutputFormat, ProcessingMode } from '../types';
 import { formatFileSize, resolveOutputFormat } from '../utils/grayscale';
-import { decodeHeicToPng, decodeTiffToPng, needsSoftwareDecode, processStillImage, loadPreviewSource, renderPreview, type PreviewSource } from '../utils/imageProcessor';
+import { decodeHeicToPng, decodeTiffToPng, needsSoftwareDecode, processStillImage } from '../utils/imageProcessor';
 import { analyzeGif, convertAnimatedGif } from '../utils/gif';
 import { downloadAll, downloadItem } from '../utils/download';
 import { CompareSlider } from './CompareSlider';
@@ -58,12 +58,10 @@ export const Converter: React.FC<ConverterProps> = ({ onImageProcessed }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [zipping, setZipping] = useState(false);
-  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
   const itemsRef = useRef<ImageFileItem[]>([]);
   const urlsRef = useRef<Set<string>>(new Set());
   const runToken = useRef(0);
-  const previewCache = useRef<Map<string, PreviewSource>>(new Map());
 
   useEffect(() => {
     itemsRef.current = items;
@@ -189,47 +187,9 @@ export const Converter: React.FC<ConverterProps> = ({ onImageProcessed }) => {
       }
     },
     [controls, convertOne, patch, track]
-  );
+    );
 
-  // The comparison view follows the sliders immediately. The source pixels are
-  // cached per image, so a drag only re-runs the grayscale pass, and the
-  // downloadable file is re-encoded separately once the controls settle.
-  useEffect(() => {
-  const id = activeId;
-  if (!id) return;
-  const item = itemsRef.current.find((entry) => entry.id === id);
-  if (!item?.originalUrl) return;
-
-  let cancelled = false;
-  const render = (source: PreviewSource) => {
-  void renderPreview(source, controls).then((url) => {
-  if (cancelled) {
-  URL.revokeObjectURL(url);
-  return;
-  }
-  setLivePreviewUrl((previous) => {
-  if (previous) URL.revokeObjectURL(previous);
-  return url;
-  });
-  });
-  };
-
-  const cached = previewCache.current.get(id);
-  if (cached) {
-  render(cached);
-  } else {
-  void loadPreviewSource(item.originalUrl).then((source) => {
-  if (cancelled) return;
-  previewCache.current.set(id, source);
-  render(source);
-  });
-  }
-
-  return () => {
-  cancelled = true;
-  };
-  }, [activeId, controls]);
-  const firstRun = useRef(true);
+    const firstRun = useRef(true);
   const controlsKey = `${controls.mode}|${controls.brightness}|${controls.contrast}|${controls.exposure}|${controls.outputFormat}`;
   useEffect(() => {
     if (firstRun.current) {
@@ -302,11 +262,7 @@ export const Converter: React.FC<ConverterProps> = ({ onImageProcessed }) => {
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="min-w-0">
               {active && (
-                <CompareSlider
-                beforeUrl={active.originalUrl}
-                afterUrl={livePreviewUrl ?? active.processedUrl}
-                alt={active.name}
-                />
+                <CompareSlider beforeUrl={active.originalUrl} adjustments={controls} alt={active.name} />
               )}
 
               <div className="mt-4 flex items-center justify-between gap-3">
@@ -523,8 +479,9 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({ controls, busy, label, on
  <button
  onClick={() => onChange({ brightness: 0, contrast: 0, exposure: 0 })}
  disabled={controls.brightness === 0 && controls.contrast === 0 && controls.exposure === 0}
- className="mt-1 text-xs text-subtext transition-colors hover:text-white disabled:cursor-not-allowed disabled:text-white/20"
+ className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/15 py-2 text-xs font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:border-white/5 disabled:text-white/20"
  >
+ <RotateCcw className="h-3.5 w-3.5" />
  {label('controls.reset')}
  </button>
 
