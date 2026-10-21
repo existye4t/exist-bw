@@ -2,7 +2,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [react()],
+ base: '/exist-bw/',
+ plugins: [react()],
   build: {
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
