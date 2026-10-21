@@ -2,7 +2,7 @@
 
 Black and white, done in the browser. Drop in a photo, get it back in monochrome. Nothing is uploaded, nothing is stored, and there is no account.
 
-**[Open the app](https://existye4t.github.io/exist-bw/)**
+The app is live at [existye4t.github.io/exist-bw](https://existye4t.github.io/exist-bw/).
 
 ## What it does
 
