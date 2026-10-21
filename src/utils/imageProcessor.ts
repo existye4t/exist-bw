@@ -53,9 +53,59 @@ export async function renderGrayscale(
   const target = format === 'jpeg' ? flattenForJpeg(canvas) : canvas;
   const blob = await canvasToBlob(target, mime, adjustments.quality);
   return { blob, width, height };
-}
+  }
 
-function loadImageElement(url: string): Promise<HTMLImageElement> {
+  const PREVIEW_MAX = 1400;
+
+  export interface PreviewSource {
+  width: number;
+  height: number;
+  pixels: Uint8ClampedArray;
+  }
+
+  // Read the image once, scaled down to a preview size. Live adjustments reuse
+  // this buffer, so dragging a slider never decodes or resizes the file again.
+  export function loadPreviewSource(url: string): Promise<PreviewSource> {
+  return new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+  const scale = Math.min(1, PREVIEW_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+  const width = Math.max(1, Math.round(img.naturalWidth * scale));
+  const height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+  reject(new Error('Could not get a canvas context.'));
+  return;
+  }
+  ctx.drawImage(img, 0, 0, width, height);
+  resolve({ width, height, pixels: ctx.getImageData(0, 0, width, height).data });
+  };
+  img.onerror = () => reject(new Error('The browser could not decode this image.'));
+  img.src = url;
+  });
+  }
+
+  // Apply the current adjustments to a cached preview and return a displayable
+  // blob URL. The caller revokes the previous URL.
+  export async function renderPreview(source: PreviewSource, adjustments: Adjustments): Promise<string> {
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not get a canvas context.');
+
+  const imageData = new ImageData(new Uint8ClampedArray(source.pixels), source.width, source.height);
+  toGrayscale(imageData, adjustments);
+  ctx.putImageData(imageData, 0, 0);
+
+  const blob = await canvasToBlob(canvas, 'image/png', 1);
+  return URL.createObjectURL(blob);
+  }
+
+  function loadImageElement(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);

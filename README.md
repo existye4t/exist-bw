@@ -2,7 +2,7 @@
 
 Black and white, done in the browser. Drop in a photo, get it back in monochrome. Nothing is uploaded, nothing is stored, and there is no account.
 
-The app is live at [existye4t.github.io/exist-bw](https://existye4t.github.io/exist-bw/).
+[![existye4t.github.io/exist-bw](https://img.shields.io/badge/live-existye4t.github.io%2Fexist--bw-black?style=for-the-badge&logo=googlechrome&logoColor=white)](https://existye4t.github.io/exist-bw/)
 
 ## What it does
 
@@ -23,7 +23,7 @@ Four modes shape that gray before it reaches the file:
 
 Brightness, contrast and exposure sit on top of the mode, each from −100 to +100. Contrast pivots around mid-gray, so a gray card stays put while the ends spread. Exposure is measured in stops.
 
-Drag the divider on the preview to compare the original against the result.
+The preview follows the sliders as you drag them. The divider compares the original against the result.
 
 ## Formats
 
